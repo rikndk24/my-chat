@@ -7,8 +7,8 @@ app.config['SECRET_KEY'] = 'secret!'
 socketio = SocketIO(app, cors_allowed_origins="*")
 
 # ⚠️ ПАРОЛИ ⚠️
-PASSWORD = "LukaSuperSecretChat2024!"  # Пароль для всех друзей
-ADMIN_PASSWORD = "LukaBoss2024!"       # ТВОЙ СЕКРЕТНЫЙ ПАРОЛЬ
+PASSWORD = "LukaSuperSecretChattshhh"  # Пароль для всех друзей
+ADMIN_PASSWORD = "Lukastalker!"       # ТВОЙ СЕКРЕТНЫЙ ПАРОЛЬ
 ADMIN_NICK = "Luka"                    # Твой зарезервированный ник
 
 HTML = """
@@ -193,7 +193,7 @@ HTML = """
             
             var nickDiv = document.createElement('div');
             nickDiv.className = 'nickname';
-            nickDiv.innerText = data.isAdmin ? data.nick + " 👑" : data.nick;
+            nickDiv.innerText = data.isAdmin ? data.nick + " 🧙‍♂️" : data.nick;
             if (!data.isAdmin) nickDiv.style.color = color;
             
             var textDiv = document.createElement('div');
