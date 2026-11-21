@@ -1,15 +1,16 @@
 import os
-from flask import Flask, render_template_string, request
+from flask import Flask, render_template_string
 from flask_socketio import SocketIO, emit
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'secret!'
 socketio = SocketIO(app, cors_allowed_origins="*")
 
-# ⚠️ ТВОЙ ПАРОЛЬ ⚠️
-PASSWORD = "12345" 
+# ⚠️ ПАРОЛИ ⚠️
+PASSWORD = "LukaSuperSecretChat2024!"  # Пароль для всех друзей
+ADMIN_PASSWORD = "LukaBoss2024!"       # ТВОЙ СЕКРЕТНЫЙ ПАРОЛЬ
+ADMIN_NICK = "Luka"                    # Твой зарезервированный ник
 
-# HTML-шаблон чата (встроен прямо сюда для удобства)
 HTML = """
 <!DOCTYPE html>
 <html>
@@ -17,67 +18,200 @@ HTML = """
     <title>Секретный чат</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
-        body { font-family: Arial; background: #f0f2f5; margin: 0; padding: 20px; }
-        #login-box, #chat-box { max-width: 500px; margin: auto; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        body { font-family: 'Segoe UI', Arial, sans-serif; background: #eef2f5; margin: 0; padding: 10px; }
+        #login-box, #chat-box { max-width: 500px; margin: auto; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
         #chat-box { display: none; }
-        #messages { height: 300px; overflow-y: scroll; border: 1px solid #ccc; padding: 10px; margin-bottom: 10px; background: #e5ddd5; border-radius: 5px; }
-        .msg { background: white; padding: 8px; margin-bottom: 5px; border-radius: 5px; width: fit-content; max-width: 80%; }
-        .msg.me { background: #dcf8c6; margin-left: auto; }
-        input[type="text"], input[type="password"] { width: 80%; padding: 10px; margin-bottom: 10px; border: 1px solid #ccc; border-radius: 5px; }
-        button { padding: 10px 20px; background: #4CAF50; color: white; border: none; border-radius: 5px; cursor: pointer; }
-        button:hover { background: #45a049; }
+        #messages { height: 450px; overflow-y: scroll; border: 1px solid #e0e0e0; padding: 10px; margin-bottom: 10px; background: #f9f9f9; border-radius: 8px; display: flex; flex-direction: column; }
+        
+        .msg-row { display: flex; margin-bottom: 12px; width: 100%; align-items: flex-end; }
+        .msg-row.me { flex-direction: row-reverse; }
+        
+        .avatar { width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 18px; color: white; margin: 0 10px; flex-shrink: 0; box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
+        
+        .msg-content { background: white; padding: 10px 14px; border-radius: 12px; max-width: 75%; display: flex; flex-direction: column; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .msg-row.me .msg-content { background: #dcf8c6; }
+        
+        /* СТИЛЬ ДЛЯ АДМИНА (КРАСНЫЙ МАРКЕР) */
+        .msg-row.admin .msg-content { 
+            background: #ff4d4d; /* Ярко-красный фон */
+            border: 2px solid #cc0000; 
+            box-shadow: 0 3px 8px rgba(255, 77, 77, 0.4); 
+        }
+        .msg-row.admin .nickname { color: #fff !important; font-size: 13px; text-shadow: 0 1px 2px rgba(0,0,0,0.3); }
+        .msg-row.admin .text { color: #ffffff; font-weight: 500; } /* Белый текст для читаемости */
+        .msg-row.admin .avatar { border: 2px solid #cc0000; }
+
+        .nickname { font-size: 12px; font-weight: bold; color: #555; margin-bottom: 4px; }
+        .text { word-wrap: break-word; color: #222; font-size: 15px; }
+
+        input[type="text"], input[type="password"] { width: 100%; box-sizing: border-box; padding: 12px; margin-bottom: 12px; border: 1px solid #ccc; border-radius: 8px; font-size: 15px; outline: none; }
+        input:focus { border-color: #4CAF50; }
+        button { padding: 12px; background: #4CAF50; color: white; border: none; border-radius: 8px; cursor: pointer; width: 100%; font-size: 16px; font-weight: bold; transition: 0.2s; }
+        button:hover { background: #43a047; }
+        
+        .emojis { display: flex; gap: 8px; margin-bottom: 15px; flex-wrap: wrap; justify-content: center; }
+        .emoji-btn { font-size: 24px; cursor: pointer; padding: 8px; border: 2px solid transparent; border-radius: 8px; background: #f0f0f0; width: 50px; height: 50px; display: flex; justify-content: center; align-items: center; transition: 0.2s; }
+        .emoji-btn.selected { border-color: #4CAF50; background: #e8f5e9; transform: scale(1.1); }
     </style>
 </head>
 <body>
     <div id="login-box">
-        <h2>Вход в чат</h2>
-        <p>Введите пароль:</p>
+        <h2 style="text-align:center; color:#333;">Вход в чат</h2>
+        <input type="text" id="nickname" placeholder="Твой никнейм">
+        <p style="text-align:center; margin:5px 0 10px; color:#666;">Выбери аватарку:</p>
+        <div class="emojis" id="emoji-container">
+            <button class="emoji-btn" onclick="selectEmoji('🐺', this)">🐺</button>
+            <button class="emoji-btn" onclick="selectEmoji('🦊', this)">🦊</button>
+            <button class="emoji-btn" onclick="selectEmoji('🐻', this)">🐻</button>
+            <button class="emoji-btn" onclick="selectEmoji('🐸', this)">🐸</button>
+            <button class="emoji-btn" onclick="selectEmoji('🦁', this)">🦁</button>
+            <button class="emoji-btn" onclick="selectEmoji('👽', this)">👽</button>
+            <button class="emoji-btn" onclick="selectEmoji('👾', this)">👾</button>
+            <button class="emoji-btn" onclick="selectEmoji('💀', this)">💀</button>
+        </div>
         <input type="password" id="password" placeholder="Пароль">
         <button onclick="login()">Войти</button>
-        <p id="error" style="color:red;"></p>
+        <p id="error" style="color:red; text-align:center; font-weight:bold; margin-bottom: 0;"></p>
     </div>
 
     <div id="chat-box">
-        <h2>Общий чат</h2>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+            <h2 style="margin: 0; color:#333;">Общий чат</h2>
+            <div>
+                <button id="clear-btn" onclick="clearChat()" style="width: auto; padding: 8px 15px; background: #f39c12; font-size: 14px; display: none; margin-right: 5px;">Очистить</button>
+                <button onclick="logout()" style="width: auto; padding: 8px 15px; background: #e74c3c; font-size: 14px;">Выйти</button>
+            </div>
+        </div>
         <div id="messages"></div>
-        <input type="text" id="message" placeholder="Сообщение...">
-        <button onclick="sendMessage()">Отправить</button>
+        <div style="display:flex; gap:10px;">
+            <input type="text" id="message" placeholder="Написать сообщение..." onkeypress="if(event.key === 'Enter') sendMessage()" style="margin-bottom:0;">
+            <button onclick="sendMessage()" style="width: 120px;">Отправить</button>
+        </div>
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
     <script>
         var socket = io();
+        var currentNick = "";
+        var currentEmoji = "🐺"; 
+        var myId = Math.random().toString(36).substr(2, 9); 
+        var isAdmin = false;
         
+        function selectEmoji(emoji, btn) {
+            currentEmoji = emoji;
+            document.querySelectorAll('.emoji-btn').forEach(b => b.classList.remove('selected'));
+            btn.classList.add('selected');
+        }
+        
+        document.querySelector('.emoji-btn').classList.add('selected');
+
         function login() {
             var pwd = document.getElementById('password').value;
-            if(pwd === "{{ password }}") {
-                document.getElementById('login-box').style.display = 'none';
-                document.getElementById('chat-box').style.display = 'block';
-            } else {
+            var nick = document.getElementById('nickname').value.trim();
+            
+            if (pwd === "{{ admin_password }}") {
+                currentNick = "{{ admin_nick }}";
+                isAdmin = true;
+            } 
+            else if (pwd === "{{ password }}") {
+                if (nick.toLowerCase() === "{{ admin_nick }}".toLowerCase()) {
+                    document.getElementById('error').innerText = "Этот ник зарезервирован создателем!";
+                    return;
+                }
+                if (nick === "") {
+                    document.getElementById('error').innerText = "Введи никнейм!";
+                    return;
+                }
+                currentNick = nick;
+                isAdmin = false;
+            } 
+            else {
                 document.getElementById('error').innerText = "Неверный пароль!";
+                return;
             }
+
+            document.getElementById('login-box').style.display = 'none';
+            document.getElementById('chat-box').style.display = 'block';
+            document.getElementById('message').focus();
+            
+            if (isAdmin) {
+                document.getElementById('clear-btn').style.display = 'inline-block';
+            }
+        }
+
+        function logout() {
+            document.getElementById('chat-box').style.display = 'none';
+            document.getElementById('login-box').style.display = 'block';
+            document.getElementById('password').value = "";
+            document.getElementById('error').innerText = "";
+            document.getElementById('nickname').value = "";
+            isAdmin = false;
+            document.getElementById('clear-btn').style.display = 'none';
+            document.getElementById('messages').innerHTML = "";
         }
 
         function sendMessage() {
             var input = document.getElementById('message');
             var text = input.value;
             if(text.trim() !== "") {
-                socket.emit('send_message', {'text': text});
+                socket.emit('send_message', {
+                    'text': text,
+                    'nick': currentNick,
+                    'emoji': isAdmin ? '👑' : currentEmoji,
+                    'id': myId,
+                    'isAdmin': isAdmin
+                });
                 input.value = "";
             }
         }
 
-        document.getElementById('message').addEventListener('keypress', function (e) {
-            if (e.key === 'Enter') sendMessage();
-        });
+        function clearChat() {
+            if (isAdmin) {
+                socket.emit('clear_chat');
+            }
+        }
 
         socket.on('receive_message', function(data) {
             var messages = document.getElementById('messages');
-            var div = document.createElement('div');
-            div.className = 'msg';
-            div.innerText = data.text;
-            messages.appendChild(div);
+            
+            var row = document.createElement('div');
+            row.className = 'msg-row';
+            if (data.id === myId) row.classList.add('me');
+            if (data.isAdmin) row.classList.add('admin');
+            
+            var avatar = document.createElement('div');
+            avatar.className = 'avatar';
+            avatar.innerText = data.emoji;
+            
+            var hash = 0;
+            for (var i = 0; i < data.nick.length; i++) hash = data.nick.charCodeAt(i) + ((hash << 5) - hash);
+            var color = 'hsl(' + (hash % 360) + ', 70%, 50%)'; 
+            if (!data.isAdmin) avatar.style.backgroundColor = color;
+
+            var content = document.createElement('div');
+            content.className = 'msg-content';
+            
+            var nickDiv = document.createElement('div');
+            nickDiv.className = 'nickname';
+            nickDiv.innerText = data.isAdmin ? data.nick + " 👑" : data.nick;
+            if (!data.isAdmin) nickDiv.style.color = color;
+            
+            var textDiv = document.createElement('div');
+            textDiv.className = 'text';
+            textDiv.innerText = data.text;
+            
+            content.appendChild(nickDiv);
+            content.appendChild(textDiv);
+            
+            row.appendChild(avatar);
+            row.appendChild(content);
+            messages.appendChild(row);
+            
             messages.scrollTop = messages.scrollHeight;
+        });
+
+        socket.on('chat_cleared', function() {
+            document.getElementById('messages').innerHTML = "";
         });
     </script>
 </body>
@@ -86,11 +220,15 @@ HTML = """
 
 @app.route('/')
 def index():
-    return render_template_string(HTML, password=PASSWORD)
+    return render_template_string(HTML, password=PASSWORD, admin_password=ADMIN_PASSWORD, admin_nick=ADMIN_NICK)
 
 @socketio.on('send_message')
 def handle_message(data):
     emit('receive_message', data, broadcast=True)
+
+@socketio.on('clear_chat')
+def handle_clear():
+    emit('chat_cleared', broadcast=True)
 
 if __name__ == '__main__':
     socketio.run(app, host='0.0.0.0', port=5000, allow_unsafe_werkzeug=True)
