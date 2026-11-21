@@ -31,7 +31,7 @@ HTML = """
         .msg-content { background: white; padding: 10px 14px; border-radius: 12px; max-width: 75%; display: flex; flex-direction: column; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
         .msg-row.me .msg-content { background: #dcf8c6; }
         
-        /* СТИЛЬ ДЛЯ АДМИНА (КРАСНЫЙ МАРКЕР) */
+        /* СТИЛЬ ДЛЯ АДМИНА (БЕЛЫЙ) */
         .msg-row.admin .msg-content { 
             background: #ff4d4d; /* Ярко-красный фон */
             border: 2px solid #cc0000; 
